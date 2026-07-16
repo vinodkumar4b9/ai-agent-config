@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: [eks-gitops-argocd]  # your 20 repos
+        repo: [eks-gitops-argocd,backstage-vinod]  # your 20 repos
         branch: [test, stage]
     steps:
       - uses: actions/checkout@v5
