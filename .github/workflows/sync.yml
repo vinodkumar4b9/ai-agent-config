@@ -10,7 +10,7 @@ jobs:
         repo: [eks-gitops-argocd, backstage-vinod]  # your 20 repos
         branch: [main, dev]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dmnemec/copy_file_to_another_repo_action@main
         with:
           source_file: 'agents.md'
