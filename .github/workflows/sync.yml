@@ -1,0 +1,19 @@
+name: Sync agents.md to all repos
+on:
+  push:
+    paths: ['agents.md']
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: [eks-gitops-argocd, backstage-vinod]  # your 20 repos
+        branch: [main, dev]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dmnemec/copy_file_to_another_repo_action@main
+        with:
+          source_file: 'agents.md'
+          destination_repo: 'vinodkumar4b9/${{ matrix.repo }}'
+          destination_branch: '${{ matrix.branch }}'
+          destination_folder: '.'  # root of repo
