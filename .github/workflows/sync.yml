@@ -6,18 +6,37 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        repo: [eks-gitops-argocd,backstage-vinod]  # your 20 repos
-        branch: [test, stage]
+        repo: [eks-gitops-argocd, backstage-vinod]
+        branch: [main, dev]
     steps:
-      - uses: actions/checkout@v5
-      - uses: dmnemec/copy_file_to_another_repo_action@main
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+      - name: Checkout source repo
+        uses: actions/checkout@v5
         with:
-          source_file: 'agents.md'
-          destination_repo: 'vinodkumar4b9/${{ matrix.repo }}'
-          destination_branch: '${{ matrix.branch }}'
-          destination_folder: '.'
-          user_email: 'vinodkumar4b9@gmail.com'
-          user_name: 'vinodkumar4b9'
+          path: source
+
+      - name: Checkout destination repo
+        uses: actions/checkout@v5
+        with:
+          repository: vinodkumar4b9/${{ matrix.repo }}
+          ref: ${{ matrix.branch }}
+          token: ${{ secrets.API_TOKEN_GITHUB }}
+          path: destination
+
+      - name: Copy agents.md
+        run: cp source/agents.md destination/agents.md
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: destination
+          token: ${{ secrets.API_TOKEN_GITHUB }}
+          commit-message: 'Sync agents.md from ai-agent-config'
+          title: 'Sync agents.md from ai-agent-config'
+          body: |
+            Automated sync of `agents.md` from
+            https://github.com/vinodkumar4b9/ai-agent-config/commit/${{ github.sha }}
+          branch: sync/agents-md-${{ matrix.branch }}
+          base: ${{ matrix.branch }}
+          delete-branch: true
