@@ -12,8 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
         with:
           source_file: 'agents.md'
           destination_repo: 'vinodkumar4b9/${{ matrix.repo }}'
           destination_branch: '${{ matrix.branch }}'
-          destination_folder: '.'  # root of repo
+          destination_folder: '.'
+          user_email: 'vinodkumar4b9@gmail.com'
+          user_name: 'vinodkumar4b9'
