@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-- **Project Name:** [Your Project Name]
+- **Project Name:** [sample project]
 - **Description:** [Brief description of what this application does]
 - **Tech Stack:** [e.g., Python 3.12, FastAPI, AWS CDK, DynamoDB, Lambda]
 - **Architecture:** [e.g., Microservices / Monolith / Serverless]
