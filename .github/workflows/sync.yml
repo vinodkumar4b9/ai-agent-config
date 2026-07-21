@@ -1,42 +1,98 @@
-name: Sync agents.md to all repos
+name: Sync AGENTS.md to all repos
 on:
   push:
-    paths: ['agents.md']
+    paths: ['AGENTS.md', 'AGENTS.*.md', 'sync-config.json']
+  workflow_dispatch:
+    inputs:
+      filter_branch:
+        description: 'Run only for this branch name (leave empty to run all)'
+        required: false
+        default: ''
+
 jobs:
+  setup:
+    runs-on: uhg-runner
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v5
+
+      - name: Build matrix from sync-config.json
+        id: set-matrix
+        run: |
+          filter="${{ github.event.inputs.filter_branch }}"
+          if [ -n "$filter" ]; then
+            echo "Filtering to branch: $filter"
+            matrix=$(jq -c --arg f "$filter" '[.repos[] | . as $r | .branches[] | select(.name == $f) | {repo: $r.name, branch: .name, env: (.env // .name)}]' sync-config.json)
+          else
+            matrix=$(jq -c '[.repos[] | . as $r | .branches[] | {repo: $r.name, branch: .name, env: (.env // .name)}]' sync-config.json)
+          fi
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
   sync:
-    runs-on: ubuntu-latest
+    needs: setup
+    runs-on: uhg-runner
     strategy:
       fail-fast: false
       matrix:
-        repo: [eks-gitops-argocd, backstage-vinod]
-        branch: [main, dev]
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       - name: Checkout source repo
         uses: actions/checkout@v5
         with:
           path: source
 
+      - name: Check if branch exists in destination repo
+        id: check_branch
+        env:
+          GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
+        run: |
+          if gh api repos/uhc-tech-provider/${{ matrix.repo }}/branches/${{ matrix.branch }} --silent 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Branch ${{ matrix.branch }} found in ${{ matrix.repo }}, proceeding."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Branch ${{ matrix.branch }} NOT found in ${{ matrix.repo }}, skipping."
+          fi
+
       - name: Checkout destination repo
+        if: steps.check_branch.outputs.exists == 'true'
         uses: actions/checkout@v5
         with:
-          repository: vinodkumar4b9/${{ matrix.repo }}
+          repository: uhc-tech-provider/${{ matrix.repo }}
           ref: ${{ matrix.branch }}
           token: ${{ secrets.API_TOKEN_GITHUB }}
           path: destination
 
-      - name: Copy agents.md
-        run: cp source/agents.md destination/agents.md
+      - name: Copy AGENTS.md for environment
+        if: steps.check_branch.outputs.exists == 'true'
+        run: |
+          if [ -f "source/AGENTS.${{ matrix.env }}.md" ]; then
+            echo "Using environment-specific AGENTS.${{ matrix.env }}.md"
+            cp "source/AGENTS.${{ matrix.env }}.md" destination/AGENTS.md
+          else
+            echo "AGENTS.${{ matrix.env }}.md not found, falling back to default AGENTS.md"
+            cp source/AGENTS.md destination/AGENTS.md
+          fi
 
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v7
-        with:
-          path: destination
-          token: ${{ secrets.API_TOKEN_GITHUB }}
-          commit-message: 'Sync agents.md from ai-agent-config'
-          title: 'Sync agents.md from ai-agent-config'
-          body: |
-            Automated sync of `agents.md` from
-            https://github.com/vinodkumar4b9/ai-agent-config/commit/${{ github.sha }}
-          branch: sync/agents-md-${{ matrix.branch }}
-          base: ${{ matrix.branch }}
-          delete-branch: true
+        if: steps.check_branch.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
+        run: |
+          cd destination
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git checkout -b "sync/agents-md-${{ matrix.branch }}"
+          git add AGENTS.md
+          git diff --cached --quiet && echo "No changes to sync" && exit 0
+          git commit -m "Sync AGENTS.md (${{ matrix.env }}) from superconnector-ai-agent-skills"
+          git push origin "sync/agents-md-${{ matrix.branch }}" --force
+          gh pr create \
+            --repo "uhc-tech-provider/${{ matrix.repo }}" \
+            --base "${{ matrix.branch }}" \
+            --head "sync/agents-md-${{ matrix.branch }}" \
+            --title "Sync AGENTS.md (${{ matrix.env }}) from superconnector-ai-agent-skills" \
+            --body "Automated sync of \`AGENTS.${{ matrix.env }}.md\` from https://github.com/uhc-tech-provider/superconnector-ai-agent-skills/commit/${{ github.sha }}" \
+          || echo "PR already exists, skipping"
